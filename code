@@ -1,0 +1,128 @@
+Sub ProcessTrackData()
+
+    ' Error handler
+    On Error GoTo ErrorHandler
+
+    ' Define variables
+    Dim wsTrack As Worksheet
+    Dim wsResults As Worksheet
+    Dim trackWB As Workbook
+    Dim resultsWB As Workbook
+    Dim lastRow As Long
+    Dim i As Long
+    Dim currentName As Variant ' Must be Variant
+    Dim currentDate As String
+    Dim timeSum As Double
+    Dim outputRow As Long
+    Dim dict As Object
+    Dim nameDict As Object
+    Dim datesArray() As Variant
+    Dim sortedDates() As Variant
+    Dim j As Long
+    
+    ' Set workbooks and worksheets
+    Set trackWB = Workbooks("track.xlsx") ' Replace with your track workbook name
+    Set resultsWB = Workbooks("results.xlsx") ' Replace with your results workbook name
+    Set wsTrack = trackWB.Sheets(1)
+    Set wsResults = resultsWB.Sheets(1)
+
+    ' Initialize output row in results worksheet
+    outputRow = 2
+
+    ' Create dictionaries
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set nameDict = CreateObject("Scripting.Dictionary")
+
+    ' Find the last row in the track worksheet
+    lastRow = wsTrack.Cells(wsTrack.Rows.Count, "A").End(xlUp).Row
+
+    ' Loop through the track worksheet
+    For i = 2 To lastRow
+        currentName = wsTrack.Cells(i, 1).Value
+        currentDate = wsTrack.Cells(i, 2).Value
+        timeSum = wsTrack.Cells(i, 3).Value
+
+        ' Combine name and date as the key
+        key = currentName & "|" & currentDate
+        
+        ' Add or update the time sum in the dictionary
+        If dict.exists(key) Then
+            dict(key) = dict(key) + timeSum
+        Else
+            dict.Add key, timeSum
+        End If
+        
+        ' Store the date in the nameDict dictionary
+        If Not nameDict.exists(currentName) Then
+            Set nameDict(currentName) = CreateObject("Scripting.Dictionary")
+        End If
+        nameDict(currentName)(currentDate) = dict(key)
+    Next i
+
+    ' Loop through the names
+    For Each currentName In nameDict.Keys
+        ' Get and sort the dates for the current name
+        datesArray = nameDict(currentName).Keys
+        sortedDates = SortDates(datesArray)
+        
+        ' Print the name only once
+        wsResults.Cells(outputRow, 1).Value = currentName
+
+        ' Loop through sorted dates and output to the results workbook
+        For j = LBound(sortedDates) To UBound(sortedDates)
+            currentDate = sortedDates(j)
+            timeSum = nameDict(currentName)(currentDate)
+            If timeSum < 8 And timeSum <> 7.9 Then
+                wsResults.Cells(outputRow, 2).Value = currentDate ' Date
+                wsResults.Cells(outputRow, 3).Value = timeSum ' Sum of Time
+                outputRow = outputRow + 1
+            End If
+        Next j
+    Next currentName
+
+    ' Clean up
+    Set dict = Nothing
+    Set wsTrack = Nothing
+    Set wsResults = Nothing
+    Set trackWB = Nothing
+    Set resultsWB = Nothing
+
+    MsgBox "Processing Complete"
+    Exit Sub
+
+ErrorHandler:
+    ' Display error information
+    MsgBox "An error occurred: " & Err.Description & vbCrLf & _
+           "Error Number: " & Err.Number & vbCrLf & _
+           "Line: " & Erl, vbCritical, "Error"
+    Resume Cleanup
+
+Cleanup:
+    ' Clean up even in case of error
+    Set dict = Nothing
+    Set wsTrack = Nothing
+    Set wsResults = Nothing
+    Set trackWB = Nothing
+    Set resultsWB = Nothing
+
+End Sub
+
+Function SortDates(datesArray As Variant) As Variant
+    ' Sorts an array of dates in ascending order using ArrayList
+    Dim sortedList As Object
+    Dim i As Long
+
+    ' Create an ArrayList to sort the dates
+    Set sortedList = CreateObject("System.Collections.ArrayList")
+    
+    ' Add dates to the ArrayList
+    For i = LBound(datesArray) To UBound(datesArray)
+        sortedList.Add datesArray(i)
+    Next i
+    
+    ' Sort the ArrayList
+    sortedList.Sort
+    
+    ' Return the sorted dates as an array
+    SortDates = sortedList.toarray()
+End Function
